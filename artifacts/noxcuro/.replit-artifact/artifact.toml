@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "noXcuro — Constelaciones Rizomiceliales"
+description = "Procesador de texto para el sistema noXcuro/Constelaciones Rizomiceliales. Recibe texto bruto, corrige únicamente faltas ortográficas y de acentuación manteniendo todas las palabras en minúsculas, genera frontmatter YAML completo para Obsidian con tags, categorías del sistema (Método, Cosmogonía, Museo, Escritura, Identidad, Leyes), conexiones semánticas sugeridas, y preserva el original para auditoría. Exporta Markdown listo para pegar en Obsidian."
+version = "1.0.0"
+id = "artifacts/noxcuro"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25596
+
+[services.development]
+run = "pnpm --filter @workspace/noxcuro run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/noxcuro", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/noxcuro/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25596"
+BASE_PATH = "/"

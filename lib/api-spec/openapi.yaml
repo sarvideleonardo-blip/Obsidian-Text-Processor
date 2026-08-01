@@ -3,20 +3,26 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: noXcuro — Constelaciones Rizomiceliales API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: process
+    description: Text processing operations
+  - name: entries
+    description: Entry management
+  - name: stats
+    description: System statistics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +30,342 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /process:
+    post:
+      operationId: processText
+      tags: [process]
+      summary: Process raw text — correct spelling/accents, lowercase, generate Obsidian frontmatter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcessInput"
+      responses:
+        "200":
+          description: Processed result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessResult"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /entries:
+    get:
+      operationId: listEntries
+      tags: [entries]
+      summary: List all saved entries
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: number
+            default: 50
+      responses:
+        "200":
+          description: List of entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Entry"
+    post:
+      operationId: saveEntry
+      tags: [entries]
+      summary: Save a processed entry to the database
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntryInput"
+      responses:
+        "201":
+          description: Saved entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entry"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /entries/{id}:
+    get:
+      operationId: getEntry
+      tags: [entries]
+      summary: Get a specific entry by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Entry found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Entry"
+        "404":
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteEntry
+      tags: [entries]
+      summary: Delete an entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: number
+      responses:
+        "204":
+          description: Deleted successfully
+        "404":
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [stats]
+      summary: Get system statistics — total entries, category breakdown, top tags
+      responses:
+        "200":
+          description: System stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemStats"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    ProcessInput:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          description: Raw text to process
+
+    Correction:
+      type: object
+      required: [original, corrected, index]
+      properties:
+        original:
+          type: string
+          description: Original word with spelling error
+        corrected:
+          type: string
+          description: Corrected word
+        index:
+          type: number
+          description: Word position in text (0-based)
+
+    ProcessResult:
+      type: object
+      required:
+        - originalText
+        - correctedText
+        - corrections
+        - tags
+        - categories
+        - inferredConnections
+        - frontmatterYaml
+        - obsidianMarkdown
+        - processedAt
+      properties:
+        originalText:
+          type: string
+          description: Exact copy of the original text for audit
+        correctedText:
+          type: string
+          description: Text with only spelling/accent corrections applied, all lowercase
+        corrections:
+          type: array
+          items:
+            $ref: "#/components/schemas/Correction"
+          description: Audit trail of every correction made
+        tags:
+          type: array
+          items:
+            type: string
+          description: Auto-generated tags for Obsidian
+        categories:
+          type: array
+          items:
+            type: string
+          description: noXcuro categories detected (Método, Cosmogonía, Museo, Escritura, Identidad, Leyes)
+        inferredConnections:
+          type: array
+          items:
+            type: string
+          description: Semantic connections inferred from text, marked as suggested
+        frontmatterYaml:
+          type: string
+          description: YAML frontmatter block for Obsidian
+        obsidianMarkdown:
+          type: string
+          description: Complete Obsidian-ready Markdown with frontmatter + corrected text
+        processedAt:
+          type: string
+          format: date-time
+
+    Entry:
+      type: object
+      required:
+        - id
+        - originalText
+        - correctedText
+        - corrections
+        - tags
+        - categories
+        - inferredConnections
+        - frontmatterYaml
+        - obsidianMarkdown
+        - createdAt
+      properties:
+        id:
+          type: number
+        originalText:
+          type: string
+        correctedText:
+          type: string
+        corrections:
+          type: array
+          items:
+            $ref: "#/components/schemas/Correction"
+        tags:
+          type: array
+          items:
+            type: string
+        categories:
+          type: array
+          items:
+            type: string
+        inferredConnections:
+          type: array
+          items:
+            type: string
+        frontmatterYaml:
+          type: string
+        obsidianMarkdown:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    EntryInput:
+      type: object
+      required:
+        - originalText
+        - correctedText
+        - corrections
+        - tags
+        - categories
+        - inferredConnections
+        - frontmatterYaml
+        - obsidianMarkdown
+      properties:
+        originalText:
+          type: string
+        correctedText:
+          type: string
+        corrections:
+          type: array
+          items:
+            $ref: "#/components/schemas/Correction"
+        tags:
+          type: array
+          items:
+            type: string
+        categories:
+          type: array
+          items:
+            type: string
+        inferredConnections:
+          type: array
+          items:
+            type: string
+        frontmatterYaml:
+          type: string
+        obsidianMarkdown:
+          type: string
+
+    CategoryCount:
+      type: object
+      required: [category, count]
+      properties:
+        category:
+          type: string
+        count:
+          type: number
+
+    TagCount:
+      type: object
+      required: [tag, count]
+      properties:
+        tag:
+          type: string
+        count:
+          type: number
+
+    SystemStats:
+      type: object
+      required: [totalEntries, categoryCounts, topTags, totalCorrections]
+      properties:
+        totalEntries:
+          type: number
+        categoryCounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryCount"
+        topTags:
+          type: array
+          items:
+            $ref: "#/components/schemas/TagCount"
+        totalCorrections:
+          type: number
+          description: Total spelling corrections made across all entries

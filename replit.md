@@ -1,6 +1,6 @@
-# [Project name]
+# noXcuro — Constelaciones Rizomiceliales
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+_Procesador de texto personal: corrige solo ortografía/acentuación (siempre en minúsculas), genera frontmatter YAML completo para Obsidian con tags, categorías del sistema noXcuro, y conexiones semánticas sugeridas._
 
 ## Run & Operate
 
@@ -22,23 +22,35 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- API contract: `lib/api-spec/openapi.yaml`
+- Text processing logic: `artifacts/api-server/src/lib/textProcessor.ts`
+- DB schema: `lib/db/src/schema/entries.ts`
+- API routes: `artifacts/api-server/src/routes/{process,entries,stats}.ts`
+- Frontend: `artifacts/noxcuro/src/`
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- **Solo corrección ortográfica**: el procesador solo cambia palabras que están en el diccionario de correcciones; nunca agrega, elimina ni reordena palabras. La salida siempre es minúsculas.
+- **Conexiones siempre inferidas**: todas las conexiones se marcan explícitamente como "sugerido/inferido" en el Markdown. Nunca se presentan como hechos.
+- **LLM-ready**: la ruta `/api/process` hace todo el análisis en reglas determinísticas por ahora; el campo `llm_analisis: pendiente` en el frontmatter indica que puede conectarse un LLM real sin cambiar la arquitectura.
+- **Spell dictionary en servidor**: el diccionario de correcciones ortográficas vive en `textProcessor.ts`; puede expandirse fácilmente o reemplazarse con llamadas a un LLM/API lingüística.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- **Procesador** (`/`): pega texto bruto → corrección ortográfica + lowercase → tags, categorías noXcuro, conexiones sugeridas + Markdown Obsidian listo para copiar. Botón "guardar en historial".
+- **Constelación** (`/entradas`): historial de todas las entradas guardadas, filtrable por categoría y tag.
+- **Grafo** (`/estadisticas`): vista de salud del sistema — total de entradas, desglose por categorías, tags más frecuentes, correcciones realizadas.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Regla absoluta: NUNCA cambiar, sustituir, eliminar, agregar ni reordenar ninguna palabra del texto original. Solo correcciones ortográficas/acentuación. Siempre minúsculas.
+- Categorías del sistema noXcuro: Método, Cosmogonía, Museo, Escritura, Identidad, Leyes.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Después de cambiar `lib/api-spec/openapi.yaml`, correr `pnpm --filter @workspace/api-spec run codegen` antes de tocar el frontend.
+- El campo `integer` en OpenAPI genera `zod.int()` (Zod v4 API) que no existe en v3; usar `number` en el spec.
+- Expandir el diccionario en `textProcessor.ts` para agregar más correcciones comunes del usuario.
 
 ## Pointers
 
