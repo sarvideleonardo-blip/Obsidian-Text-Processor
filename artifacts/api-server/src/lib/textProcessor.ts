@@ -380,47 +380,85 @@ export function extractTags(text: string): string[] {
 
 /**
  * Suggest semantic connections (marked as inferred/suggested, never facts).
- * These are keyword-triggered hints for the user to evaluate.
+ * Always generates connections from: detected categories, thematic keywords, and concept tags.
  */
-export function suggestConnections(text: string, categories: string[]): string[] {
+export function suggestConnections(text: string, categories: string[], tags: string[]): string[] {
   const suggestions: string[] = [];
   const lowerText = text.toLowerCase();
 
-  // Cross-category connections
+  // 1. One connection per detected category → index node of that category
+  for (const cat of categories) {
+    suggestions.push(`[[índice-${cat}]] #inferido`);
+  }
+
+  // 2. Always link to the main system root
+  suggestions.push(`[[noXcuro-sistema]] #inferido`);
+
+  // 3. Cross-category connections
   if (categories.includes("método") && categories.includes("cosmogonía")) {
-    suggestions.push("[[método-cosmogonía]] (sugerido: proceso que genera cosmogonía)");
+    suggestions.push("[[método-cosmogonía]] #inferido — proceso que genera cosmogonía");
   }
   if (categories.includes("escritura") && categories.includes("identidad")) {
-    suggestions.push("[[escritura-identidad]] (sugerido: escritura como construcción de identidad)");
+    suggestions.push("[[escritura-identidad]] #inferido — escritura como construcción de identidad");
   }
-  if (categories.includes("museo") && categories.includes("memoria")) {
-    suggestions.push("[[museo-memoria]] (sugerido: colección como memoria materializada)");
+  if (categories.includes("museo") && categories.includes("escritura")) {
+    suggestions.push("[[museo-escritura]] #inferido — objeto-texto en el archivo");
   }
   if (categories.includes("leyes") && categories.includes("cosmogonía")) {
-    suggestions.push("[[leyes-cosmogonía]] (sugerido: las leyes rigen el cosmos del sistema)");
+    suggestions.push("[[leyes-cosmogonía]] #inferido — las leyes rigen el cosmos del sistema");
+  }
+  if (categories.includes("método") && categories.includes("escritura")) {
+    suggestions.push("[[método-escritura]] #inferido — escritura como metodología");
+  }
+  if (categories.includes("identidad") && categories.includes("método")) {
+    suggestions.push("[[identidad-método]] #inferido — el método como construcción identitaria");
   }
 
-  // Thematic keywords → connection suggestions
-  if (/\bmicelio\b|\brizomic\b|\brizom[aá]/i.test(lowerText)) {
-    suggestions.push("[[constelaciones-rizomiceliales]] (sugerido: nodo del sistema rhizomycelial)");
+  // 4. Thematic keyword connections
+  if (/micelio|rizomic|rizom[aá]/i.test(lowerText)) {
+    suggestions.push("[[constelaciones-rizomiceliales]] #inferido — nodo del sistema mycelial");
   }
-  if (/\bgrafo\b|\bgrafo\b|\bconexion\b|\bconexión\b|\benlace\b|\bred\b/i.test(lowerText)) {
-    suggestions.push("[[grafo-obsidian]] (sugerido: relevante para la visualización del grafo)");
+  if (/grafo|red|conexi[oó]n|enlace|trama|tejido/i.test(lowerText)) {
+    suggestions.push("[[grafo-obsidian]] #inferido — relevante para visualización del grafo");
   }
-  if (/\bmemoria\b|\brecuerdo\b|\barchivo\b/i.test(lowerText)) {
-    suggestions.push("[[nodo-memoria]] (sugerido: entrada relacionada con memoria/archivo)");
+  if (/memoria|recuerdo|archivo|huella/i.test(lowerText)) {
+    suggestions.push("[[nodo-memoria]] #inferido — entrada relacionada con memoria/archivo");
   }
-  if (/\btransformacion\b|\btransformación\b|\bcambio\b|\bevolucion\b|\bevolución\b/i.test(lowerText)) {
-    suggestions.push("[[nodo-transformación]] (sugerido: proceso de cambio o evolución)");
+  if (/transformaci[oó]n|cambio|evoluci[oó]n|mutaci[oó]n|devenir/i.test(lowerText)) {
+    suggestions.push("[[nodo-transformación]] #inferido — proceso de cambio o evolución");
   }
-  if (/\bcuerpo\b|\bcorporal\b|\bfísico\b|\bfisico\b/i.test(lowerText)) {
-    suggestions.push("[[nodo-cuerpo]] (sugerido: dimensión corporal o material)");
+  if (/cuerpo|corporal|f[ií]sico|materia|objeto/i.test(lowerText)) {
+    suggestions.push("[[nodo-cuerpo]] #inferido — dimensión corporal o material");
   }
-  if (/\btiempo\b|\btemporal\b|\bduracion\b|\bduración\b|\binstante\b/i.test(lowerText)) {
-    suggestions.push("[[nodo-tiempo]] (sugerido: dimensión temporal)");
+  if (/tiempo|temporal|duraci[oó]n|instante|momento|cronol/i.test(lowerText)) {
+    suggestions.push("[[nodo-tiempo]] #inferido — dimensión temporal");
+  }
+  if (/lenguaje|palabra|signo|s[ií]mbolo|significado|sentido/i.test(lowerText)) {
+    suggestions.push("[[nodo-lenguaje]] #inferido — dimensión semiótica/lingüística");
+  }
+  if (/imagen|visual|ver|mirada|ojo|vista/i.test(lowerText)) {
+    suggestions.push("[[nodo-imagen]] #inferido — dimensión visual/perceptiva");
+  }
+  if (/sistema|estructura|orden|organizaci[oó]n|arquitectura/i.test(lowerText)) {
+    suggestions.push("[[nodo-sistema]] #inferido — dimensión sistémica/estructural");
+  }
+  if (/emocion|emoción|sentimiento|afecto|sensaci[oó]n|sentir/i.test(lowerText)) {
+    suggestions.push("[[nodo-emoción]] #inferido — dimensión afectiva");
+  }
+  if (/conocimiento|saber|aprender|episteme|teoria|teor[ií]a/i.test(lowerText)) {
+    suggestions.push("[[nodo-conocimiento]] #inferido — dimensión epistémica");
+  }
+  if (/creaci[oó]n|crear|hacer|producir|generar|obra/i.test(lowerText)) {
+    suggestions.push("[[nodo-creación]] #inferido — acto creativo");
   }
 
-  return [...new Set(suggestions)].slice(0, 6);
+  // 5. Top tags as concept links (first 4)
+  for (const tag of tags.slice(0, 4)) {
+    const link = `[[concepto-${tag}]] #inferido`;
+    suggestions.push(link);
+  }
+
+  return [...new Set(suggestions)].slice(0, 15);
 }
 
 /**
@@ -493,8 +531,8 @@ export function processText(rawText: string): ProcessedText {
   // Step 3: Extract tags
   const tags = extractTags(correctedText);
 
-  // Step 4: Suggest connections
-  const inferredConnections = suggestConnections(correctedText, categories);
+  // Step 4: Suggest connections (uses tags too for concept links)
+  const inferredConnections = suggestConnections(correctedText, categories, tags);
 
   // Step 5: Generate note title
   const title = generateNoteTitle(correctedText, now);
@@ -513,25 +551,62 @@ export function processText(rawText: string): ProcessedText {
   // Step 7: Build correction audit block
   const correctionAudit =
     corrections.length > 0
-      ? `\n## 🔍 correcciones ortográficas realizadas\n\n${corrections
-          .map((c) => `- **posición ${c.index}**: \`${c.original}\` → \`${c.corrected}\``)
-          .join("\n")}\n`
-      : "\n## 🔍 correcciones ortográficas realizadas\n\n_ninguna corrección necesaria_\n";
+      ? corrections.map((c) => `- \`${c.original}\` → \`${c.corrected}\` (posición ${c.index})`).join("\n")
+      : "_ninguna corrección necesaria_";
 
-  // Step 8: Build full Obsidian markdown
+  // Step 8: Concept links block — tags as [[concepto]] wiki-links for Obsidian graph
+  const conceptLinks = tags.map((t) => `[[concepto-${t}]]`).join("  ");
+
+  // Step 9: Category links
+  const categoryLinks = categories.length > 0
+    ? categories.map((c) => `[[índice-${c}]]`).join("  ")
+    : "_sin categorías detectadas_";
+
+  // Step 10: Connections block — each as a proper [[link]] for Obsidian graph
+  const connectionsBlock = inferredConnections.length > 0
+    ? inferredConnections.map((c) => `- ${c}`).join("\n")
+    : "- _ninguna conexión inferida — agregar más contexto al texto_";
+
+  // Step 11: Build full Obsidian markdown
+  //   - frontmatter YAML (for Dataview + Graph View metadata)
+  //   - corrected text (only spelling/accent fixed, all lowercase, same words)
+  //   - concept nodes as [[links]] (feeds graph edges)
+  //   - connections (inferred, always marked)
+  //   - corrections audit
+  //   - original preserved for audit
   const obsidianMarkdown = `${frontmatterYaml}
 
 ## texto corregido
 
 ${correctedText}
+
+---
+
+## conceptos detectados
+
+> nodos del grafo — cada [[enlace]] crea una arista en Obsidian Graph View
+
+${conceptLinks || "_sin conceptos extraídos_"}
+
+## categorías noXcuro
+
+${categoryLinks}
+
+## conexiones inferidas
+
+> estas conexiones son sugeridas por el sistema — no son hechos verificados
+
+${connectionsBlock}
+
+## correcciones ortográficas
+
 ${correctionAudit}
+
+---
+
 ## original (auditoría)
 
 > ${rawText.replace(/\n/g, "\n> ")}
-
-## conexiones sugeridas (inferidas — no verificadas)
-
-${inferredConnections.length > 0 ? inferredConnections.join("\n") : "_sin conexiones sugeridas en esta entrada_"}
 `;
 
   return {

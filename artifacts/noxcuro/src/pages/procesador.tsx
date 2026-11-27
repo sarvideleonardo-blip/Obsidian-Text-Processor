@@ -1,19 +1,51 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useProcessText, useSaveEntry, getListEntriesQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
-import { Button, Textarea, Card, CardHeader, CardTitle, CardContent, Badge } from "@/components/ui/core";
+import { Button } from "@/components/ui/button";
 import { CategoryBadge } from "@/components/CategoryBadge";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Save, Copy, Loader2, Check, ArrowRight, Network } from "lucide-react";
+import { Sparkles, Save, Copy, Loader2, Check, ArrowRight, Network, Link2, FileText, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+
+// ─── Clipboard helper — works in Replit iframe (no navigator.clipboard perms) ──
+function copyToClipboard(text: string): Promise<void> {
+  // Try modern API first
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
+  }
+  return legacyCopy(text);
+}
+
+function legacyCopy(text: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error("execCommand failed"));
+    } catch (e) {
+      document.body.removeChild(ta);
+      reject(e);
+    }
+  });
+}
 
 export default function Procesador() {
   const [text, setText] = useState("");
   const [hasCopied, setHasCopied] = useState(false);
+  const [hasCopiedConn, setHasCopiedConn] = useState(false);
+  const markdownRef = useRef<HTMLPreElement>(null);
   const queryClient = useQueryClient();
-  
+
   const processTextMutation = useProcessText();
   const saveEntryMutation = useSaveEntry();
+
+  const result = processTextMutation.data;
 
   const handleProcess = () => {
     if (!text.trim()) {
@@ -21,22 +53,42 @@ export default function Procesador() {
       return;
     }
     processTextMutation.mutate({ data: { text } }, {
-      onSuccess: () => {
-        toast.success("Pensamiento procesado");
-      },
-      onError: (err) => {
-        toast.error(err.error || "Error al procesar el texto");
-      }
+      onSuccess: () => toast.success("Pensamiento procesado y tejido"),
+      onError: () => toast.error("Error al procesar el texto"),
     });
   };
 
-  const handleCopy = () => {
+  const handleCopyMarkdown = () => {
     if (!result) return;
-    navigator.clipboard.writeText(result.obsidianMarkdown).then(() => {
-      setHasCopied(true);
-      toast.success("Copiado al portapapeles");
-      setTimeout(() => setHasCopied(false), 2000);
-    });
+    copyToClipboard(result.obsidianMarkdown)
+      .then(() => {
+        setHasCopied(true);
+        toast.success("Markdown completo copiado — listo para pegar en Obsidian");
+        setTimeout(() => setHasCopied(false), 3000);
+      })
+      .catch(() => {
+        // Fallback: select the pre element text
+        if (markdownRef.current) {
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(markdownRef.current);
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+          toast("Seleccionado — presioná Ctrl+C / Cmd+C para copiar", { duration: 5000 });
+        }
+      });
+  };
+
+  const handleCopyConnections = () => {
+    if (!result) return;
+    const connText = result.inferredConnections.join("\n");
+    copyToClipboard(connText)
+      .then(() => {
+        setHasCopiedConn(true);
+        toast.success("Conexiones copiadas");
+        setTimeout(() => setHasCopiedConn(false), 2000);
+      })
+      .catch(() => toast.error("No se pudo copiar automáticamente"));
   };
 
   const handleSave = () => {
@@ -60,17 +112,14 @@ export default function Procesador() {
         setText("");
         processTextMutation.reset();
       },
-      onError: (err) => {
-        toast.error(err.error || "Error al guardar");
-      }
+      onError: () => toast.error("Error al guardar"),
     });
   };
 
-  const result = processTextMutation.data;
-
   return (
-    <div className="space-y-8 pb-10 max-w-4xl mx-auto">
-      <div className="space-y-2">
+    <div className="space-y-8 pb-12 max-w-4xl mx-auto">
+      {/* Header */}
+      <div className="space-y-1">
         <h2 className="text-2xl font-sans tracking-tight text-foreground/90 flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" />
           Materia Prima
@@ -80,139 +129,198 @@ export default function Procesador() {
         </p>
       </div>
 
+      {/* Input area */}
       <div className="relative">
         <div className="absolute -inset-1 bg-gradient-to-r from-primary/10 via-secondary/10 to-transparent blur-lg rounded-xl opacity-50" />
-        <Card className="relative border-primary/20 bg-background/50">
-          <CardContent className="p-1">
-            <Textarea
-              placeholder="pensamientos..."
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="min-h-[200px] border-0 focus-visible:ring-0 bg-transparent resize-y text-base"
-            />
-          </CardContent>
-          <div className="p-4 border-t border-border/50 flex justify-end bg-card/30 rounded-b-xl">
-            <Button 
-              onClick={handleProcess} 
+        <div className="relative border border-primary/20 bg-background/50 rounded-xl overflow-hidden">
+          <textarea
+            placeholder="pensamientos..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleProcess(); }}
+            className="w-full min-h-[200px] resize-y text-base font-mono bg-transparent p-4 text-foreground placeholder:text-muted-foreground/40 border-0 outline-none focus:ring-0"
+          />
+          <div className="p-4 border-t border-border/50 flex items-center justify-between bg-card/30">
+            <span className="text-xs font-mono text-muted-foreground/50">Ctrl+Enter para procesar</span>
+            <Button
+              onClick={handleProcess}
               disabled={processTextMutation.isPending || !text.trim()}
-              variant="glow"
-              className="gap-2 font-mono"
+              className="gap-2 font-mono bg-primary/90 hover:bg-primary text-primary-foreground shadow-[0_0_20px_rgba(0,200,200,0.2)]"
             >
-              {processTextMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {processTextMutation.isPending
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Sparkles className="w-4 h-4" />}
               {processTextMutation.isPending ? "Procesando..." : "Asimilar"}
             </Button>
           </div>
-        </Card>
+        </div>
       </div>
 
+      {/* Results */}
       <AnimatePresence>
         {result && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="space-y-6 pt-4"
+            exit={{ opacity: 0, scale: 0.97 }}
+            className="space-y-5"
           >
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="md:col-span-2">
-                <CardHeader className="pb-3 border-b border-border/50">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-sm font-mono text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                      <Network className="w-4 h-4 text-primary" />
-                      Metadatos
-                    </CardTitle>
-                    <div className="flex gap-1 flex-wrap justify-end">
-                      {result.categories.map(c => (
-                        <CategoryBadge key={c} category={c} />
+            {/* ── Texto corregido ─────────────────────────────────────────── */}
+            <section className="border border-border/60 rounded-xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 bg-muted/20 border-b border-border/40">
+                <FileText className="w-4 h-4 text-primary" />
+                <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Texto corregido</span>
+                {result.corrections.length > 0 && (
+                  <span className="ml-auto text-xs font-mono text-primary/70">{result.corrections.length} corrección{result.corrections.length !== 1 ? "es" : ""}</span>
+                )}
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-sm font-mono leading-relaxed text-foreground/90 whitespace-pre-wrap">
+                  {result.correctedText}
+                </p>
+                {result.corrections.length > 0 && (
+                  <div className="pt-3 border-t border-border/30">
+                    <div className="text-xs text-muted-foreground font-mono mb-2 uppercase tracking-wider">Correcciones realizadas</div>
+                    <div className="flex flex-wrap gap-2">
+                      {result.corrections.map((c, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-xs font-mono bg-destructive/10 border border-destructive/20 px-2 py-1 rounded">
+                          <span className="line-through text-destructive/70">{c.original}</span>
+                          <ArrowRight className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-primary">{c.corrected}</span>
+                        </div>
                       ))}
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent className="pt-4 space-y-6">
-                  {result.tags.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Etiquetas</div>
-                      <div className="flex flex-wrap gap-2">
-                        {result.tags.map(t => (
-                          <Badge key={t} variant="secondary" className="font-mono text-xs before:content-['#'] before:mr-0.5 before:opacity-50">
-                            {t}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {result.inferredConnections.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider text-amber-500/80">Conexiones sugeridas</div>
-                      <ul className="space-y-1.5">
-                        {result.inferredConnections.map(conn => (
-                          <li key={conn} className="text-sm font-mono flex items-start gap-2 text-foreground/80">
-                            <span className="text-amber-500/50 mt-0.5">[[</span>
-                            <span className="border-b border-amber-500/20">{conn}</span>
-                            <span className="text-amber-500/50 mt-0.5">]]</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {result.corrections.length > 0 && (
-                    <div className="space-y-2 pt-4 border-t border-border/50">
-                      <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Correcciones ({result.corrections.length})</div>
-                      <div className="flex flex-wrap gap-x-4 gap-y-2">
-                        {result.corrections.map((c, i) => (
-                          <div key={i} className="flex items-center gap-1.5 text-xs font-mono bg-muted/30 px-2 py-1 rounded">
-                            <span className="line-through text-destructive/70">{c.original}</span>
-                            <ArrowRight className="w-3 h-3 text-muted-foreground" />
-                            <span className="text-primary">{c.corrected}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <div className="space-y-4">
-                <Button 
-                  onClick={handleSave} 
-                  disabled={saveEntryMutation.isPending}
-                  className="w-full h-auto py-4 font-mono flex-col gap-2 bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/30 shadow-[0_0_15px_rgba(138,43,226,0.1)] hover:shadow-[0_0_20px_rgba(138,43,226,0.2)]"
-                >
-                  {saveEntryMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Save className="w-6 h-6" />}
-                  <span>Guardar en Constelación</span>
-                </Button>
-                
-                <Card>
-                  <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-xs font-mono text-muted-foreground uppercase tracking-widest">Previsualización</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-0">
-                    <p className="text-sm font-sans line-clamp-6 text-foreground/80 leading-relaxed">
-                      {result.correctedText}
-                    </p>
-                  </CardContent>
-                </Card>
+                )}
               </div>
+            </section>
+
+            {/* ── Tags + Categorías ────────────────────────────────────────── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {result.tags.length > 0 && (
+                <section className="border border-border/60 rounded-xl overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-3 bg-muted/20 border-b border-border/40">
+                    <Tag className="w-4 h-4 text-secondary" />
+                    <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Tags generados</span>
+                  </div>
+                  <div className="p-4 flex flex-wrap gap-2">
+                    {result.tags.map((t) => (
+                      <span key={t} className="text-xs font-mono px-2 py-0.5 rounded bg-secondary/10 text-secondary border border-secondary/20">
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              )}
+              {result.categories.length > 0 && (
+                <section className="border border-border/60 rounded-xl overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-3 bg-muted/20 border-b border-border/40">
+                    <Network className="w-4 h-4 text-accent" />
+                    <span className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Categorías noXcuro</span>
+                  </div>
+                  <div className="p-4 flex flex-wrap gap-2">
+                    {result.categories.map((c) => (
+                      <CategoryBadge key={c} category={c} />
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
 
-            <Card className="border-primary/20 overflow-hidden">
-              <div className="flex items-center justify-between p-2 bg-muted/30 border-b border-border">
-                <div className="px-3 text-xs font-mono text-muted-foreground uppercase tracking-widest">
-                  Salida Obsidian
+            {/* ── CONEXIONES ───────────────────────────────────────────────── */}
+            <section className="border border-amber-500/30 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-amber-500/5 border-b border-amber-500/20">
+                <div className="flex items-center gap-2">
+                  <Link2 className="w-4 h-4 text-amber-400" />
+                  <span className="text-xs font-mono uppercase tracking-widest text-amber-400">
+                    Conexiones — {result.inferredConnections.length} nodos inferidos
+                  </span>
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleCopy} className="h-8 gap-2 font-mono text-xs">
-                  {hasCopied ? <Check className="w-3 h-3 text-primary" /> : <Copy className="w-3 h-3" />}
-                  {hasCopied ? "Copiado" : "Copiar"}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopyConnections}
+                  className="h-7 gap-1.5 text-xs font-mono text-amber-400/70 hover:text-amber-400"
+                >
+                  {hasCopiedConn ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  Copiar conexiones
                 </Button>
               </div>
-              <div className="p-4 bg-[#0d1117] overflow-x-auto">
-                <pre className="text-xs font-mono leading-relaxed text-foreground/90 whitespace-pre-wrap break-words">
+              <div className="p-4">
+                <p className="text-xs font-mono text-muted-foreground/60 mb-3 italic">
+                  Inferidas por el sistema — no son hechos verificados. Estas líneas aparecen en el Markdown copiado como [[enlaces]] para el grafo de Obsidian.
+                </p>
+                {result.inferredConnections.length > 0 ? (
+                  <ul className="space-y-2">
+                    {result.inferredConnections.map((conn, i) => (
+                      <motion.li
+                        key={i}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.04 }}
+                        className="text-sm font-mono text-foreground/80 flex items-start gap-2"
+                      >
+                        <span className="text-amber-500/50 shrink-0 mt-px">—</span>
+                        <span className="text-amber-300/90">{conn}</span>
+                      </motion.li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm font-mono text-muted-foreground/40 italic">
+                    Sin conexiones inferidas — agrega más contexto al texto.
+                  </p>
+                )}
+              </div>
+            </section>
+
+            {/* ── MARKDOWN PARA OBSIDIAN ───────────────────────────────────── */}
+            <section className="border border-primary/30 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 bg-primary/5 border-b border-primary/20">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-mono uppercase tracking-widest text-primary">
+                    Markdown para Obsidian
+                  </span>
+                  <span className="text-xs font-mono text-muted-foreground/50">
+                    — frontmatter + texto + conexiones + auditoría
+                  </span>
+                </div>
+                <Button
+                  onClick={handleCopyMarkdown}
+                  size="sm"
+                  className={`h-8 gap-2 font-mono text-xs transition-all ${
+                    hasCopied
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30"
+                  }`}
+                >
+                  {hasCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  {hasCopied ? "Copiado" : "Copiar Markdown completo"}
+                </Button>
+              </div>
+              <div className="bg-[#080d14] overflow-x-auto max-h-[500px] overflow-y-auto">
+                <pre
+                  ref={markdownRef}
+                  className="p-5 text-xs font-mono leading-relaxed text-foreground/85 whitespace-pre-wrap break-words"
+                >
                   {result.obsidianMarkdown}
                 </pre>
               </div>
-            </Card>
+              <div className="px-4 py-2 bg-muted/10 border-t border-border/30 flex items-center justify-between">
+                <span className="text-xs font-mono text-muted-foreground/40">
+                  {result.obsidianMarkdown.length} caracteres · pegar directamente en Obsidian como nueva nota
+                </span>
+                <Button
+                  onClick={handleSave}
+                  disabled={saveEntryMutation.isPending}
+                  size="sm"
+                  className="h-7 gap-1.5 text-xs font-mono bg-secondary/10 hover:bg-secondary/20 text-secondary border border-secondary/30"
+                >
+                  {saveEntryMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  Guardar en Constelación
+                </Button>
+              </div>
+            </section>
 
           </motion.div>
         )}
